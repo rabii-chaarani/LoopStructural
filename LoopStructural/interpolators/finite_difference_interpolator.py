@@ -98,27 +98,33 @@ class FiniteDifferenceInterpolator(DiscreteInterpolator):
         # otherwise just use defaults
         if 'operators' not in kwargs:
             operator = Operator.Dxy_mask
-
+            global_indexes = self.support.neighbour_global_indexes()
             self.assemble_inner(operator, np.sqrt(2 * self.vol) *
-                                self.interpolation_weights['dxy'])
+                                self.interpolation_weights['dxy'],
+                                global_indexes=global_indexes)
             operator = Operator.Dyz_mask
             self.assemble_inner(operator, np.sqrt(2 * self.vol) *
-                                self.interpolation_weights['dyz'])
+                                self.interpolation_weights['dyz'],
+                                global_indexes=global_indexes)
             operator = Operator.Dxz_mask
             self.assemble_inner(operator, np.sqrt(2 * self.vol) *
-                                self.interpolation_weights['dxz'])
+                                self.interpolation_weights['dxz'],
+                                global_indexes=global_indexes)
             operator = Operator.Dxx_mask
             self.assemble_inner(operator,
                                 np.sqrt(self.vol) * self.interpolation_weights[
-                                    'dxx'])
+                                    'dxx'],
+                                    global_indexes=global_indexes)
             operator = Operator.Dyy_mask
             self.assemble_inner(operator,
                                 np.sqrt(self.vol) * self.interpolation_weights[
-                                    'dyy'])
+                                    'dyy'],
+                                    global_indexes=global_indexes)
             operator = Operator.Dzz_mask
             self.assemble_inner(operator,
                                 np.sqrt(self.vol) * self.interpolation_weights[
-                                    'dzz'])
+                                    'dzz'],
+                                    global_indexes=global_indexes)
         self.add_norm_constraint(
             np.sqrt(self.vol) * self.interpolation_weights['npw'])
         self.add_gradient_constraint(
@@ -365,7 +371,7 @@ class FiniteDifferenceInterpolator(DiscreteInterpolator):
         self.assemble_inner(operator)
         # self.assemble_borders()
 
-    def assemble_inner(self, operator, w):
+    def assemble_inner(self, operator, w, global_indexes = None):
         """
 
         Parameters
@@ -379,8 +385,8 @@ class FiniteDifferenceInterpolator(DiscreteInterpolator):
         """
         # First get the global indicies of the pairs of neighbours this should be an
         # Nx27 array for 3d and an Nx9 array for 2d
-
-        global_indexes = self.support.neighbour_global_indexes()  # np.array([ii,jj]))
+        if global_indexes is None:
+            global_indexes = self.support.neighbour_global_indexes()  # np.array([ii,jj]))
 
         a = np.tile(operator.flatten(), (global_indexes.shape[1], 1))
         idc = global_indexes.T
