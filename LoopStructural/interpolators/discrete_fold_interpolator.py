@@ -31,8 +31,11 @@ class DiscreteFoldInterpolator(PiecewiseLinearInterpolator):
         PiecewiseLinearInterpolator.__init__(self, support)
         self.type = ['foldinterpolator']
         self.fold = fold
-
-
+        self.fold_region = self.region
+    
+    def set_fold_region(self,fold_region):
+        self.fold_region = fold_region(self.support.nodes)
+        
     @classmethod
     def from_piecewise_linear_and_fold(cls, pli, fold):
         """
@@ -111,6 +114,11 @@ class DiscreteFoldInterpolator(PiecewiseLinearInterpolator):
         For more information about the fold weights see EPSL paper by Gautier Laurent 2016
 
         """
+        region = self.fold_region.astype('int64')
+        nxf = len(self.support.nodes[region])
+        nxnf = len(self.support.nodes[~region])
+        print('nxf',nxf)
+        print('nxnf',nxnf)
         # get the gradient of all of the elements of the mesh
         eg = self.support.get_element_gradients(np.arange(self.support.n_elements))
         # get array of all nodes for all elements N,4,3
@@ -135,7 +143,24 @@ class DiscreteFoldInterpolator(PiecewiseLinearInterpolator):
             A *= fold_orientation
             B = np.zeros(A.shape[0])
             idc = self.support.get_elements()[element_idx[::step],:]
-            self.add_constraints_to_least_squares(A, B, idc, name='fold orientation')
+            # print(idc)
+            # print(self.support.n_nodes)
+            # gi = np.zeros(self.support.n_nodes,dtype='int64')
+            # gi[:] = -1
+            # print(region.sum())
+            # gi[region] = np.arange(0, nxf).astype(int)
+            # print('gi',gi.shape,gi[region].shape)
+            # print(np.min(idc),np.max(idc))
+            # idc = gi[idc]
+            # print(idc)
+            # outside = ~np.any(idc == -1, axis=1)
+            # print(outside)
+            inside = np.all(region[idc],axis=1)
+
+            self.add_constraints_to_least_squares(A[inside,:], 
+                                                    B[inside], 
+                                                    idc[inside,:],
+                                                    name='fold orientation')
 
         if fold_axis_w is not None:
             """
@@ -147,10 +172,24 @@ class DiscreteFoldInterpolator(PiecewiseLinearInterpolator):
             A = np.einsum('ij,ijk->ik', fold_axis[element_idx[::step],:], eg[element_idx[::step],:,:])
             A *= vol[element_idx[::step], None]
             A *= fold_axis_w
-            B = np.zeros(A.shape[0]).tolist()
+            B = np.zeros(A.shape[0])
             idc = self.support.get_elements()[element_idx[::step],:]
 
-            self.add_constraints_to_least_squares(A, B, idc, name='fold axis')
+            # gi = np.zeros(self.support.n_nodes)
+            # gi[:] = -1
+            # gi[region] = np.arange(0, nxf)
+            # idc = gi[idc]
+            # outside = ~np.any(idc == -1, axis=1)
+            # print(outside)
+            # print(A[outside,:])
+            # print(B[outside])
+            # print(idc[outside,:])
+            inside = np.all(region[idc],axis=1)
+
+            self.add_constraints_to_least_squares(A[inside,:], 
+                                                    B[inside], 
+                                                    idc[inside],  
+                                                    name='fold axis')
 
         if fold_normalisation is not None:
             """
@@ -169,8 +208,15 @@ class DiscreteFoldInterpolator(PiecewiseLinearInterpolator):
             B *= fold_normalisation
             B *= vol[element_idx[::step]]
             idc = self.support.get_elements()[element_idx[::step],:]
-
-            self.add_constraints_to_least_squares(A, B, idc, name='fold normalisation')
+            inside = np.all(region[idc],axis=1)
+            # gi = np.zeros(self.support.n_nodes)
+            # gi[:] = -1
+            # gi[region] = np.arange(0, nxf)
+            # idc = gi[idc]
+            # outside = ~np.any(idc == -1, axis=1)
+            self.add_constraints_to_least_squares(A[inside,:], 
+                                                    B[inside], 
+                                                    idc[inside,:],  name='fold normalisation')
 
         if fold_regularisation is not None:
             """
@@ -178,24 +224,83 @@ class DiscreteFoldInterpolator(PiecewiseLinearInterpolator):
             """
             logger.info("Adding fold regularisation constraint to {} w = {} {} {}".format(self.propertyname,
             fold_regularisation[0],fold_regularisation[1],fold_regularisation[1]))
-
-            idc, c, ncons = fold_cg(eg, dgz, self.support.get_neighbours(), self.support.get_elements(), self.support.nodes)
+            # add fold constant gradient regularisation 
+            # projects gradient onto fold frame vectors
+            idc, c, ncons = fold_cg(eg, 
+                                    dgz, 
+                                    self.support.get_neighbours(), 
+                                    self.support.get_elements(), 
+                                    self.support.nodes,
+                                    region)
             A = np.array(c[:ncons, :])
             A *= fold_regularisation[0]
             B = np.zeros(A.shape[0])
             idc = np.array(idc[:ncons, :])
-            self.add_constraints_to_least_squares(A, B, idc, name='fold regularisation 1')
+            # gi = np.zeros(self.support.n_nodes)
+            # gi[:] = -1
+            # gi[self.region] = np.arange(0, nxf)
+            # idc = gi[idc]
+            # outside = ~np.any(idc == -1, axis=1)
+            self.add_constraints_to_least_squares(A, 
+                                                    B, 
+                                                    idc, 
+                                                    name='fold regularisation 1')
 
-            idc, c, ncons = fold_cg(eg, deformed_orientation, self.support.get_neighbours(), self.support.get_elements(), self.support.nodes)
+            idc, c, ncons = fold_cg(eg, 
+                                    deformed_orientation, 
+                                    self.support.get_neighbours(), 
+                                    self.support.get_elements(), 
+                                    self.support.nodes,
+                                    region
+                                    )
             A = np.array(c[:ncons, :])
             A *= fold_regularisation[1]
             B = np.zeros(A.shape[0])
             idc = np.array(idc[:ncons, :])
-            self.add_constraints_to_least_squares(A, B, idc, name='fold regularisation 2')
+            # gi = np.zeros(self.support.n_nodes)
+            # gi[:] = -1
+            # gi[self.region] = np.arange(0, nxf)
+            # idc = gi[idc]
+            # outside = ~np.any(idc == -1, axis=1)
+            self.add_constraints_to_least_squares(A, 
+                                                    B, 
+                                                    idc, 
+                                                    name='fold regularisation 2')
 
-            idc, c, ncons = fold_cg(eg, fold_axis, self.support.get_neighbours(), self.support.get_elements(), self.support.nodes)
+            idc, c, ncons = fold_cg(eg, 
+                                    fold_axis, 
+                                    self.support.get_neighbours(), 
+                                    self.support.get_elements(), 
+                                    self.support.nodes,
+                                    region)
             A = np.array(c[:ncons, :])
             A *= fold_regularisation[2]
             B = np.zeros(A.shape[0])
             idc = np.array(idc[:ncons, :])
-            self.add_constraints_to_least_squares(A, B, idc, name='fold regularisation 3')
+            # gi = np.zeros(self.support.n_nodes)
+            # gi[:] = -1
+            # gi[self.region] = np.arange(0, nxf)
+            # idc = gi[idc]
+            # outside = ~np.any(idc == -1, axis=1)
+            self.add_constraints_to_least_squares(A, 
+                                                    B, 
+                                                    idc, 
+                                                    name='fold regularisation 3')
+        if nxnf > 0:
+            cgw = 0.1
+            A, idc, B = self.support.get_constant_gradient(region=~region)
+            A = np.array(A)
+            B = np.array(B)
+            idc = np.array(idc)
+
+            # gi = np.zeros(self.support.n_nodes)
+            # gi[:] = -1
+            # gi[~region] = np.arange(0, nxnf)
+            # idc = gi[idc]
+            # outside = ~np.any(idc == -1, axis=1)
+
+            # w/=A.shape[0]
+            self.add_constraints_to_least_squares(A * cgw,
+                                                B * cgw, idc,
+                                                name='regularisation')
+            return

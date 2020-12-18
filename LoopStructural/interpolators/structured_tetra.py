@@ -258,7 +258,6 @@ class TetMesh:
 
         """
         if direction is not None:
-            print('using cg direction')
             logger.info("Running constant gradient")
             elements_gradients = self.get_element_gradients(np.arange(self.ntetra))
             if elements_gradients.shape[0] != direction.shape[0]:
@@ -268,7 +267,11 @@ class TetMesh:
 
             neighbours = self.get_neighbours()
             elements = self.get_elements()
-            idc, c, ncons = fold_cg(elements_gradients, direction, neighbours.astype('int64'), elements.astype('int64'), self.nodes)
+            idc, c, ncons = fold_cg(elements_gradients, 
+                                    direction, neighbours.astype('int64'), 
+                                    elements.astype('int64'), 
+                                    self.nodes,
+                                    region.astype('int64'))
 
             idc = np.array(idc[:ncons, :])
             c = np.array(c[:ncons, :])

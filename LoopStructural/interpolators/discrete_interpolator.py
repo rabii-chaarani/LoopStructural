@@ -31,7 +31,8 @@ class DiscreteInterpolator(GeologicalInterpolator):
         self.B = []
         self.support = support
         self.region_function = None
-        self.region = np.arange(0, support.n_nodes)
+        self.region = np.ones(support.n_nodes,dtype=bool)
+        self.region[:] = True
         self.region_map = np.zeros(support.n_nodes).astype(int)
         # self.region_map[self.region] = np.array(range(0,
         # len(self.region_map[self.region])))

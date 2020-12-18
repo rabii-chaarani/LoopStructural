@@ -322,10 +322,13 @@ class GeologicalFeatureInterpolator:
             logger.info("Adding fold to %s" % self.name)
             self.interpolator.fold = fold
             # if we have fold weights use those, otherwise just use default
+            if 'fold_region' in kwargs:
+                self.interpolator.set_fold_region(kwargs['fold_region'])
             self.interpolator.add_fold_constraints(**fold_weights)
             if 'cgw' not in kwargs:
                 # try adding very small cg
                 kwargs['cgw'] = 0.0
+            
 
         self.interpolator.setup_interpolator(**kwargs)
         self.interpolator.solve_system(**kwargs)

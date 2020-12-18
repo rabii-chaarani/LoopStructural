@@ -57,7 +57,7 @@ def _calculate_average_intersection(series_builder, fold_frame, fold,
     """
     l2 = fold_frame.calculate_intersection_lineation(
         series_builder)
-    fold.fold_axis = np.mean(l2, axis=0)
+    fold.fold_axis = np.nanmean(l2, axis=0)
 
 
 class GeologicalModel:
@@ -638,7 +638,8 @@ class GeologicalModel:
         fold_interpolator = self.get_interpolator("DFI", fold=fold, **kwargs)
         series_builder = GeologicalFeatureInterpolator(
             interpolator=fold_interpolator,
-            name=foliation_data)
+            name=foliation_data,
+            **kwargs)
 
         series_builder.add_data_from_data_frame(
             self.data[self.data['feature_name'] == foliation_data])

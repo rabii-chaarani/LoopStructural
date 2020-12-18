@@ -178,7 +178,7 @@ def constant_norm(double [:,:,:] EG, long long [:,:] neighbours, long long [:,:]
                 c[ncons,position_to_write] -= np.sqrt(e2[0][itr_right]*e2[0][itr_right]+e2[1][itr_right]*e2[1][itr_right]+e2[2][itr_right]*e2[2][itr_right]) 
             ncons+=1
     return idc, c, ncons
-def fold_cg(double [:,:,:] EG, double [:,:] X, long long [:,:] neighbours, long long [:,:] elements,double [:,:] nodes):
+def fold_cg(double [:,:,:] EG, double [:,:] X, long long [:,:] neighbours, long long [:,:] elements,double [:,:] nodes, long long [:] region):
     cdef int Nc, Na, i,Ns, j, ne, ncons, e, n, neigh
     Nc = 5 #numer of constraints shared nodes + independent
     Na = 4 #number of nodes
@@ -205,12 +205,18 @@ def fold_cg(double [:,:,:] EG, double [:,:] X, long long [:,:] neighbours, long 
         e1 = EG[e,:,:]
         flag[e] = 1
         Xl = X[e,:]
+        # if not in region then skip this tetra
+        if region[idl[0]] == 0 or region[idl[1]] == 0 or region[idl[2]] == 0 or region[idl[3]] == 0:
+            continue
         for n in range(4):
             neigh = neighbours[e,n]
             idr = elements[neigh,:]
             if neigh == -1:
                 continue
             if flag[neigh]== 1:
+                continue
+            # if not in region then skip this tetra
+            if region[idr[0]] == 0 or region[idr[1]] == 0 or region[idr[2]] == 0 or region[idr[3]] == 0:
                 continue
             e2 = EG[neigh,:,:]
             Xr = X[neigh,:]
