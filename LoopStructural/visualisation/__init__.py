@@ -19,8 +19,7 @@ try:
     from .map_viewer import MapView
     from .rotation_angle_plotter import RotationAnglePlotter
 except ImportError:
-    logger.warning('Cannot use MapView or RotationAnglePlotter as matplotlib is not installed. \n'\
-                   'Install matplotlib and try again. ')
+    logger.warning('Cannot use MapView or RotationAnglePlotter as matplotlib is not installed.')
 try:
     from .sphinx_scraper import _get_loop_visualisation_scraper
 except:
