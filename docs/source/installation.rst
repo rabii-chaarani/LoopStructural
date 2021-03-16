@@ -12,7 +12,16 @@ Installing from pip or conda
     pip install LoopStructural
 
 .. code-block::
+
     conda install -c conda-forge -c loop3d loopstructural
+
+To use all of the functionalities in LoopStructural you should also install:
+
+* lavavu - for a computer with a desktop environment pip install lavavu, for a server or docker image use the lavavu-osmesa image
+* matplotlib - for colourmaps and 2D plotting
+* pyamg - algorithmic multigrid solvers
+* surfe - radial basis function, can pip install surfe on windows. On linux needs to be compiled from source
+
 
     
 Compiling LoopStructural from source
