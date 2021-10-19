@@ -520,20 +520,20 @@ class DiscreteInterpolator(GeologicalInterpolator):
             A, B = self.build_matrix(damp=damp)
         
         self._solve(A,B,solver,**kwargs)
-        
-        for ii in range(niter):
-            # make sure we don't modify the base matrices
-            A_ = A.copy()
-            B_ = B.copy()
-            for constraint in self._non_linear_constraints.values():
-                w = (ii**2+1)/(niter**2 )
-                ATA, ATB = constraint(w)
-                A_+= ATA
-                B_+= ATB
-            logger.info("Iteration: {}".format(ii))
-            self._solve(A_,B_,**kwargs)
-            if callable(loop_callback):
-                loop_callback(self)
+        if len(self._non_linear_constraints)>0:
+            for ii in range(niter):
+                # make sure we don't modify the base matrices
+                A_ = A.copy()
+                B_ = B.copy()
+                for constraint in self._non_linear_constraints.values():
+                    w = (ii**2+1)/(niter**2 )
+                    ATA, ATB = constraint(w)
+                    A_+= ATA
+                    B_+= ATB
+                logger.info("Iteration: {}".format(ii))
+                self._solve(A_,B_,**kwargs)
+                if callable(loop_callback):
+                    loop_callback(self)
 
     def _solve(self, A, B, solver='cg', **kwargs):
         """
