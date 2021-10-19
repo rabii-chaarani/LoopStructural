@@ -192,7 +192,7 @@ class GeologicalInterpolator:
         """
         Solves the interpolation equations
         """
-        self._solve(**kwargs)
+        self.solve(**kwargs)
         self.up_to_date = True
 
     def update(self):

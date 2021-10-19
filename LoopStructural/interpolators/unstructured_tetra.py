@@ -36,7 +36,7 @@ class UnStructuredTetMesh:
         self.n_nodes = self.nodes.shape[0]
         self.neighbours = np.array(neighbours,dtype=np.int64)
         self.elements = np.array(elements,dtype=np.int64)
-        self.barycentre = np.sum(self.nodes[self.elements][:, :, :],
+        self._barycentre = np.sum(self.nodes[self.elements][:, :, :],
                                  axis=1) / 4.
         self.minimum = np.min(self.nodes,axis=0)
         self.maximum = np.max(self.nodes,axis=0)
@@ -157,7 +157,7 @@ class UnStructuredTetMesh:
         -------
 
         """
-        np.sum(self.nodes[self.elements][:, :, :],
+        return np.sum(self.nodes[self.elements][:, :, :],
                                  axis=1) / 4.
 
 

@@ -64,7 +64,7 @@ class SurfeRBFInterpolator(GeologicalInterpolator):
         if points.shape[0]>0:
             self.surfe.SetTangentConstraints(points[:, :6])
 
-    def _solve(self, **kwargs):
+    def solve(self, **kwargs):
         self.surfe.ComputeInterpolant()
 
     def _setup_interpolator(self, **kwargs):

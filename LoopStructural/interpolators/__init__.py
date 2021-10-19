@@ -12,4 +12,4 @@ from LoopStructural.interpolators.unstructured_tetra import UnStructuredTetMesh
 from LoopStructural.interpolators.structured_grid import StructuredGrid
 from LoopStructural.interpolators.geological_interpolator import GeologicalInterpolator
 from LoopStructural.interpolators.discrete_interpolator import DiscreteInterpolator
-
+from LoopStructural.interpolators.nonlinear_constraint import BaseNonLinearConstraint, ConstantNormConstraint

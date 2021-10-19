@@ -9,7 +9,7 @@ from scipy.sparse import linalg as sla
 
 from LoopStructural.interpolators.geological_interpolator import \
     GeologicalInterpolator
-
+from LoopStructural.interpolators.nonlinear_constraint import BaseNonLinearConstraint
 from LoopStructural.utils import getLogger
 logger = getLogger(__name__)
 
@@ -50,6 +50,8 @@ class DiscreteInterpolator(GeologicalInterpolator):
         self.non_linear_constraints = []
         self.constraints = {}
         self.interpolation_weights= {}
+        self._non_linear_constraints = {}
+
         logger.info("Creating discrete interpolator with {} degrees of freedom".format(self.nx))
         self.type = 'discrete'
     @property
@@ -204,12 +206,33 @@ class DiscreteInterpolator(GeologicalInterpolator):
             self.row.extend(rows[~mask].tolist())
             self.col.extend(idc[~mask].tolist())
             self.B.extend(B.tolist())
-    
+
+    def add_non_linear_constraint(self,constraint,name):
+        """Add a nonlinear constraint to the interpolator
+
+        Parameters
+        ----------
+        constraint : NonLinearConstraint
+            a class that when called generates a ATA, ATB matrix/vector pair
+        name : string
+            identifying name
+
+        Raises
+        ------
+        LoopInterpolatorError
+            [description]
+        """
+        # if not issubclass(constraint,BaseNonLinearConstraint) and constraint.valid:
+        #     logger.error("{} is not a NonLinearConstraint".format(name))
+        #     raise LoopInterpolatorError()
+        self._non_linear_constraints[name] = constraint
+
     def calculate_residual_for_constraints(self):
         residuals = {}
         for constraint_name, constraint in self.constraints:
             residuals[constraint_name] = np.einsum('ij,ij->i',constraint['A'],self.c[constraint['idc'].astype(int)]) - constraint['B'].flatten()
         return residuals
+
     def remove_constraints_from_least_squares(self, name='undefined',
                                               constraint_ids=None):
         """
@@ -481,7 +504,38 @@ class DiscreteInterpolator(GeologicalInterpolator):
         logger.info("Solving using pyamg: tol {}".format(tol))
         return pyamg.solve(A, B, tol=tol, x0=x0, verb=False)[:self.nx]
 
-    def _solve(self, solver='cg', **kwargs):
+    def solve(self, solver='cg', niter= 0, loop_callback=None,**kwargs):
+        logger.info("Solving interpolation for {}".format(self.propertyname))
+        self.c = np.zeros(self.support.n_nodes)
+        self.c[:] = np.nan
+        damp = True
+        if 'damp' in kwargs:
+            damp = kwargs['damp']
+        if solver == 'lu':
+            logger.info("Forcing matrix damping for LU")
+            damp = True
+        if solver == 'lsqr':
+            A, B =  self.build_matrix(False)
+        else:
+            A, B = self.build_matrix(damp=damp)
+        
+        self._solve(A,B,solver,**kwargs)
+        
+        for ii in range(niter):
+            # make sure we don't modify the base matrices
+            A_ = A.copy()
+            B_ = B.copy()
+            for constraint in self._non_linear_constraints.values():
+                w = (ii**2+1)/(niter**2 )
+                ATA, ATB = constraint(w)
+                A_+= ATA
+                B_+= ATB
+            logger.info("Iteration: {}".format(ii))
+            self._solve(A_,B_,**kwargs)
+            if callable(loop_callback):
+                loop_callback(self)
+
+    def _solve(self, A, B, solver='cg', **kwargs):
         """
         Main entry point to run the solver and update the node value
         attribute for the
@@ -500,19 +554,7 @@ class DiscreteInterpolator(GeologicalInterpolator):
             True if the interpolation is run
 
         """
-        logger.info("Solving interpolation for {}".format(self.propertyname))
-        self.c = np.zeros(self.support.n_nodes)
-        self.c[:] = np.nan
-        damp = True
-        if 'damp' in kwargs:
-            damp = kwargs['damp']
-        if solver == 'lu':
-            logger.info("Forcing matrix damping for LU")
-            damp = True
-        if solver == 'lsqr':
-            A, B =  self.build_matrix(False)
-        else:
-            A, B = self.build_matrix(damp=damp)
+        
 
         # run the chosen solver
         if solver == 'cg':
