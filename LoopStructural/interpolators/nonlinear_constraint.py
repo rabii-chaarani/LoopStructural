@@ -12,7 +12,6 @@ class BaseNonLinearConstraint:
         return False
 
     def __call__(self,iteration):
-        print('wtf')
         return 
 
 class ConstantNormConstraint(BaseNonLinearConstraint):
@@ -57,7 +56,7 @@ class ConstantNormConstraint(BaseNonLinearConstraint):
         return ATA,ATB
 
 class NormMagnitudeConstraint(BaseNonLinearConstraint):
-    def __init__(self, feature, magnitude, step_calculator=lambda i: 10,w=1.):
+    def __init__(self, feature, magnitude=None, step_calculator=lambda i: 10,w=1.):
         super().__init__(feature)
         self.magnitude = magnitude
         self.step_calculator = step_calculator
@@ -70,6 +69,8 @@ class NormMagnitudeConstraint(BaseNonLinearConstraint):
         bc = self.feature.interpolator.support.barycentre()
         # calculate gradient for every element for previous iteration
         vectors = self.feature.interpolator.support.evaluate_gradient(bc,self.feature.interpolator.c)
+        if self.magnitude == None:
+            self.magnitude = np.mean(np.linalg.norm(vectors,axis=1))
         vectors /= np.linalg.norm(vectors,axis=1)[:,None]
         vectors*=self.magnitude
         vertices, element_gradients, tetras, inside = self.feature.interpolator.support.get_tetra_gradient_for_location(bc)
@@ -90,9 +91,11 @@ class NormMagnitudeConstraint(BaseNonLinearConstraint):
         idc = gi[idc]
         outside = ~np.any(idc == -1, axis=2)
         outside = outside[:, 0]
-        rows = np.tile(np.arange(d_t.shape[0]),(d_t.shape[2],d_t.shape[1],1)).T
+        idc = idc.reshape((-1,idc.shape[2]))
+        d_t = d_t.reshape((-1,d_t.shape[2]))
+        rows = np.tile(np.arange(d_t.shape[0]),(d_t.shape[1],1)).T
         A = coo_matrix((d_t.flatten(), (rows.flatten(), \
-                                                    idc.flatten())), shape=(d_t.shape[0]*d_t.shape[1], self.feature.interpolator.nx),
+                                                    idc.flatten())), shape=(d_t.shape[0], self.feature.interpolator.nx),
                                 dtype=float)
         B = vectors.flatten()
         ATA = A.T.dot(A)
