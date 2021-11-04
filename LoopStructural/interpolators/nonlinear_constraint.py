@@ -73,7 +73,7 @@ class NormMagnitudeConstraint(BaseNonLinearConstraint):
             self.magnitude = np.mean(np.linalg.norm(vectors,axis=1))
         vectors /= np.linalg.norm(vectors,axis=1)[:,None]
         vectors*=self.magnitude
-        vertices, element_gradients, tetras, inside = self.feature.interpolator.support.get_tetra_gradient_for_location(bc)
+        vertices, element_gradients, tetras, inside = self.feature.interpolator.support.get_element_gradient_for_location(bc)
         # e, inside = self.support.elements_for_array(points[:, :3])
         # nodes = self.support.nodes[self.support.elements[e]]
         vol = np.zeros(element_gradients.shape[0])
