@@ -94,20 +94,22 @@ class GeologicalFeatureInterpolator:
             a function that is called when the feature is updated 
         
         """
+        for f in self.faults:
+            f.builder.up_to_date(callback=callback)
         #has anything changed in the builder since we built the feature? if so update
         if self._up_to_date == False:
             self.update()
             if callable(callback):
-                callback()
+                callback(1)
             return
         #check if the interpolator is up to date, if not solve
         if self._interpolator.up_to_date == False:
             self.update()
             if callable(callback):
-                callback()
+                callback(1)
             return
         if callable(callback):
-            callback()
+            callback(1)
         
         
     def add_fault(self, fault):
