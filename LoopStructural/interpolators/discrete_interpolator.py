@@ -216,7 +216,7 @@ class DiscreteInterpolator(GeologicalInterpolator):
         self.c_ += nr
         
 
-    def add_non_linear_constraint(self,constraint,name):
+    def add_non_linear_constraint(self,constraint,name,w=1.):
         """Add a nonlinear constraint to the interpolator
 
         Parameters
@@ -225,6 +225,8 @@ class DiscreteInterpolator(GeologicalInterpolator):
             a class that when called generates a ATA, ATB matrix/vector pair
         name : string
             identifying name
+        w : float or callable
+            either a weight or a function that returns a weight given an iteration number
 
         Raises
         ------
@@ -234,7 +236,7 @@ class DiscreteInterpolator(GeologicalInterpolator):
         # if not issubclass(constraint,BaseNonLinearConstraint) and constraint.valid:
         #     logger.error("{} is not a NonLinearConstraint".format(name))
         #     raise LoopInterpolatorError()
-        self._non_linear_constraints[name] = constraint
+        self._non_linear_constraints[name] = [constraint,w]
 
     def calculate_residual_for_constraints(self):
         residuals = {}
@@ -308,9 +310,6 @@ class DiscreteInterpolator(GeologicalInterpolator):
         self.eq_const_row.extend((np.arange(0, idc[outside].shape[0])))
         self.eq_const_d.extend(values[outside].tolist())
         self.eq_const_c_ += idc[outside].shape[0]
-    
-    def add_non_linear_constraints(self, nonlinear_constraint):
-        self.non_linear_constraints.append(nonlinear_constraint)
 
     def add_tangent_constraints(self, w=1.0):
         """
@@ -571,8 +570,11 @@ class DiscreteInterpolator(GeologicalInterpolator):
                 A_ = A.copy()
                 B_ = B.copy()
                 for constraint in self._non_linear_constraints.values():
-                    w = (ii**2+1)/(niter**2 )
-                    ATA, ATB = constraint(w)
+                    if isisntance(constraint[1],float):
+                        w = constraint[1]
+                    if callable(isinstance):
+                        w = constraint[1](ii)
+                    ATA, ATB = constraint[0](w)
                     A_+= ATA
                     B_+= ATB
                 logger.info("Iteration: {}".format(ii))
