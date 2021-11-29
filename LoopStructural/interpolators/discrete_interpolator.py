@@ -8,6 +8,10 @@ from scipy.sparse import coo_matrix, bmat, eye
 from scipy.sparse import linalg as sla
 from scipy.sparse.linalg import norm
 from sklearn.preprocessing import normalize
+try:
+    from tqdm.auto import trange
+except:
+    trange = range
 
 from LoopStructural.interpolators.geological_interpolator import \
     GeologicalInterpolator
@@ -565,20 +569,20 @@ class DiscreteInterpolator(GeologicalInterpolator):
         
         self._solve(A,B,solver,**kwargs)
         if len(self._non_linear_constraints)>0:
-            for ii in range(niter):
+            for ii in trange(niter):
                 # make sure we don't modify the base matrices
                 A_ = A.copy()
                 B_ = B.copy()
                 for constraint in self._non_linear_constraints.values():
-                    if isisntance(constraint[1],float):
+                    if isinstance(constraint[1],float):
                         w = constraint[1]
-                    if callable(isinstance):
+                    if callable(constraint[1]):
                         w = constraint[1](ii)
                     ATA, ATB = constraint[0](w)
                     A_+= ATA
                     B_+= ATB
                 logger.info("Iteration: {}".format(ii))
-                self._solve(A_,B_,**kwargs)
+                self._solve(A_,B_,x0=self.c[self.region],**kwargs)
                 if callable(loop_callback):
                     loop_callback(self)
 

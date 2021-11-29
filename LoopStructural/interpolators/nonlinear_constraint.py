@@ -44,6 +44,8 @@ class ConstantNormConstraint(BaseNonLinearConstraint):
         A2 *= vol[pairs[:,1], None]
         # join A1,A2 
         a = np.hstack([A1,A2])
+        length = np.linalg.norm(a,axis=1)
+        a[length>0,:] /= length[length>0,None]
         idc = np.hstack([elements[pairs[:,0],:],elements[pairs[:,1],:]])
         B = np.zeros(a.shape[0])
         rows = np.tile(np.arange(a.shape[0]),(a.shape[1],1)).T
