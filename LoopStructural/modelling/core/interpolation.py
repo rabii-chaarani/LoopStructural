@@ -4,10 +4,9 @@ from LoopStructural.interpolators import P2Interpolator as P2
 from LoopStructural.interpolators import SurfeRBFInterpolator as surfer
 
 import numpy as np
-from beartype import beartype
 
 class Interpolate:
-    @beartype
+    
     def __init__(self, origin = None, maximum=None):
         self._origin = origin
         self._maximum = maximum
@@ -53,7 +52,6 @@ class Interpolate:
         return self._origin
     
     @origin.setter
-    @beartype
     def origin(self, origin: np.ndarray) -> None:
         if isinstance(origin, np.ndarray):
             self._origin = origin
@@ -65,14 +63,13 @@ class Interpolate:
         return self._maximum
 
     @maximum.setter
-    @beartype
     def maximum(self, maximum: np.ndarray) -> None:
         if isinstance(maximum, np.ndarray):
             self._maximum = maximum
         else:
             raise TypeError("maximum must be a numpy.ndarray")
 
-    @beartype
+    
     def __call__(self, xyz: np.ndarray) -> np.ndarray:
         """Evaluate the interpolator as a list of locations.
 
