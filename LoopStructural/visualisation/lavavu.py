@@ -288,15 +288,20 @@ class LavaVuModelViewer(BaseModelPlotter):
         """
         self.lv.image(name)
 
-    def image_array(self, **kwargs):
+    def image_array(self, resolution=(640,480), channels=3):
         """Return the current viewer image image data as a numpy array
 
+        resolution : tuple
+            image resolution
+        channels : int
+            number of channels to return
+            
         Returns
         -------
         image : np.array
             image as a numpy array
         """
-        return self.lv.rawimage(**kwargs).data
+        return self.lv.rawimage(resolution=resolution, channels=channels).data
 
     def rotatex(self, r):
         """
