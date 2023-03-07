@@ -8,6 +8,7 @@ __all__ = [
     "LavaVuModelViewer",
     "Map2LoopProcessor",
     "LoopProjectfileProcessor",
+    "BoundingBox"
 ]
 from ..utils import getLogger
 from ..utils import LoopImportError
@@ -17,7 +18,7 @@ from ..modelling.input import (
     ProcessInputData,
     Map2LoopProcessor,
 )
-
+from ..modelling.core._bounding_box import BoundingBox
 try:
     from ..modelling.input.project_file import LoopProjectfileProcessor
 except (LoopImportError, ImportError):
