@@ -6,36 +6,9 @@ from ...utils import getLogger, log_to_file
 import numpy as np
 import pandas as pd
 
-try:
-    from ...interpolators import DiscreteFoldInterpolator as DFI
 
-    dfi = True
-except ImportError:
-    dfi = False
-from ...interpolators import FiniteDifferenceInterpolator as FDI
-
-try:
-    from ...interpolators import PiecewiseLinearInterpolator as PLI
-
-    pli = True
-except ImportError:
-    pli = False
-
-# if LoopStructural.experimental:
-from ...interpolators import P2Interpolator
-
-try:
-    from ...interpolators import SurfeRBFInterpolator as Surfe
-
-    surfe = True
-
-except ImportError:
-    surfe = False
-
-from ...interpolators import StructuredGrid
-from ...interpolators import TetMesh
 from ...modelling.features.fault import FaultSegment
-from ...interpolators import DiscreteInterpolator
+from ...interpolators import get_interpolator
 
 from ...modelling.features.builders import (
     FaultBuilder,
@@ -65,7 +38,7 @@ from ...utils.helper import (
 from ...modelling.intrusions import IntrusionBuilder
 
 from ...modelling.intrusions import IntrusionFrameBuilder
-
+from ...modelling import BoundingBox
 
 logger = getLogger(__name__)
 
@@ -151,30 +124,10 @@ class GeologicalModel:
         self._data = None
         self.data = data
         self.nsteps = nsteps
-
+        self.bounding_box = BoundingBox(origin, maximum, rescale=rescale)
         # we want to rescale the model area so that the maximum length is
         # 1
-        self.origin = np.array(origin).astype(float)
-        originstr = f"Model origin: {self.origin[0]} {self.origin[1]} {self.origin[2]}"
-        logger.info(originstr)
-        self.maximum = np.array(maximum).astype(float)
-        maximumstr = "Model maximum: {} {} {}".format(
-            self.maximum[0], self.maximum[1], self.maximum[2]
-        )
-        logger.info(maximumstr)
 
-        lengths = self.maximum - self.origin
-        self.scale_factor = 1.0
-        self.bounding_box = np.zeros((2, 3))
-        self.bounding_box[1, :] = self.maximum - self.origin
-        self.bounding_box[1, :] = self.maximum - self.origin
-        if rescale:
-            self.scale_factor = float(np.max(lengths))
-            logger.info(
-                "Rescaling model using scale factor {}".format(self.scale_factor)
-            )
-
-        self.bounding_box /= self.scale_factor
         self.support = {}
         self.reuse_supports = reuse_supports
         if self.reuse_supports:
@@ -186,7 +139,7 @@ class GeologicalModel:
         logger.info("Reusing interpolation supports: {}".format(self.reuse_supports))
         self.stratigraphic_column = None
 
-        self.tol = 1e-10 * np.max(self.bounding_box[1, :] - self.bounding_box[0, :])
+        self.tol = 1e-10 * np.max(self.bounding_box.length)
         self._dtm = None
 
     def __str__(self):
@@ -288,6 +241,7 @@ class GeologicalModel:
         GeologicalModel
             a model with all of the features, need to call model.update() to run interpolation
         """
+
         logger.info("Creating model from processor")
         model = GeologicalModel(processor.origin, processor.maximum)
         model.data = processor.data
@@ -745,149 +699,14 @@ class GeologicalModel:
 
         - 'FDI' :class:`LoopStructural.interpolators.supports.StructuredGrid`
         """
-        bb = np.copy(self.bounding_box)
-        # add a buffer to the interpolation domain, this is necessary for
-        # faults but also generally a good
-        # idea to avoid boundary problems
-        # buffer = bb[1, :]
-        buffer = (np.min(bb[1, :] - bb[0, :])) * buffer
-        bb[0, :] -= buffer  # *(bb[1,:]-bb[0,:])
-        bb[1, :] += buffer  # *(bb[1,:]-bb[0,:])
-        box_vol = (bb[1, 0] - bb[0, 0]) * (bb[1, 1] - bb[0, 1]) * (bb[1, 2] - bb[0, 2])
-        if interpolatortype == "PLI" and pli:
-            if element_volume is None:
-                # nelements /= 5
-                element_volume = box_vol / nelements
-            # calculate the step vector of a regular cube
-            step_vector = np.zeros(3)
-            step_vector[:] = element_volume ** (1.0 / 3.0)
-            # step_vector /= np.array([1,1,2])
-            # number of steps is the length of the box / step vector
-            nsteps = np.ceil((bb[1, :] - bb[0, :]) / step_vector).astype(int)
-            if np.any(np.less(nsteps, 3)):
-                axis_labels = ["x", "y", "z"]
-                for i in range(3):
-                    if nsteps[i] < 3:
-                        logger.error(
-                            f"Number of steps in direction {axis_labels[i]} is too small, try increasing nelements"
-                        )
-                logger.error("Cannot create interpolator: number of steps is too small")
-                raise ValueError("Number of steps too small cannot create interpolator")
-            # create a structured grid using the origin and number of steps
-            if self.reuse_supports:
-                mesh_id = f"mesh_{nelements}"
-                mesh = self.support.get(
-                    mesh_id,
-                    TetMesh(origin=bb[0, :], nsteps=nsteps, step_vector=step_vector),
-                )
-                if mesh_id not in self.support:
-                    self.support[mesh_id] = mesh
-            else:
-                if "meshbuilder" in kwargs:
-                    mesh = kwargs["meshbuilder"](bb, nelements)
-                else:
-                    mesh = TetMesh(
-                        origin=bb[0, :], nsteps=nsteps, step_vector=step_vector
-                    )
-            logger.info(
-                "Creating regular tetrahedron mesh with %i elements \n"
-                "for modelling using PLI" % (mesh.ntetra)
-            )
-
-            return PLI(mesh)
-        if interpolatortype == "P2":
-            if element_volume is None:
-                # nelements /= 5
-                element_volume = box_vol / nelements
-            # calculate the step vector of a regular cube
-            step_vector = np.zeros(3)
-            step_vector[:] = element_volume ** (1.0 / 3.0)
-            # step_vector /= np.array([1,1,2])
-            # number of steps is the length of the box / step vector
-            nsteps = np.ceil((bb[1, :] - bb[0, :]) / step_vector).astype(int)
-            if "meshbuilder" in kwargs:
-                mesh = kwargs["meshbuilder"](bb, nelements)
-            else:
-                raise NotImplementedError(
-                    "Cannot use P2 interpolator without external mesh"
-                )
-            logger.info(
-                "Creating regular tetrahedron mesh with %i elements \n"
-                "for modelling using P2" % (mesh.ntetra)
-            )
-            return P2Interpolator(mesh)
-        if interpolatortype == "FDI":
-
-            # find the volume of one element
-            if element_volume is None:
-                element_volume = box_vol / nelements
-            # calculate the step vector of a regular cube
-            step_vector = np.zeros(3)
-            step_vector[:] = element_volume ** (1.0 / 3.0)
-            # number of steps is the length of the box / step vector
-            nsteps = np.ceil((bb[1, :] - bb[0, :]) / step_vector).astype(int)
-            if np.any(np.less(nsteps, 3)):
-                logger.error("Cannot create interpolator: number of steps is too small")
-                axis_labels = ["x", "y", "z"]
-                for i in range(3):
-                    if nsteps[i] < 3:
-                        logger.error(
-                            f"Number of steps in direction {axis_labels[i]} is too small, try increasing nelements"
-                        )
-                raise ValueError("Number of steps too small cannot create interpolator")
-            # create a structured grid using the origin and number of steps
-            if self.reuse_supports:
-                grid_id = "grid_{}".format(nelements)
-                grid = self.support.get(
-                    grid_id,
-                    StructuredGrid(
-                        origin=bb[0, :], nsteps=nsteps, step_vector=step_vector
-                    ),
-                )
-                if grid_id not in self.support:
-                    self.support[grid_id] = grid
-            else:
-                grid = StructuredGrid(
-                    origin=bb[0, :], nsteps=nsteps, step_vector=step_vector
-                )
-            logger.info(
-                f"Creating regular grid with {grid.n_elements} elements \n"
-                "for modelling using FDI"
-            )
-            return FDI(grid)
-
-        if interpolatortype == "DFI" and dfi is True:
-            if element_volume is None:
-                nelements /= 5
-                element_volume = box_vol / nelements
-            # calculate the step vector of a regular cube
-            step_vector = np.zeros(3)
-            step_vector[:] = element_volume ** (1.0 / 3.0)
-            # number of steps is the length of the box / step vector
-            nsteps = np.ceil((bb[1, :] - bb[0, :]) / step_vector).astype(int)
-            # create a structured grid using the origin and number of steps
-            if "meshbuilder" in kwargs:
-                mesh = kwargs["meshbuilder"].build(bb, nelements)
-            else:
-                mesh = kwargs.get(
-                    "mesh",
-                    TetMesh(origin=bb[0, :], nsteps=nsteps, step_vector=step_vector),
-                )
-            logger.info(
-                f"Creating regular tetrahedron mesh with {mesh.ntetra} elements \n"
-                "for modelling using DFI"
-            )
-            return DFI(mesh, kwargs["fold"])
-        if interpolatortype == "Surfe" or interpolatortype == "surfe":
-            # move import of surfe to where we actually try and use it
-            if not surfe:
-                logger.warning("Cannot import Surfe, try another interpolator")
-                raise ImportError("Cannot import surfepy, try pip install surfe")
-            method = kwargs.get("method", "single_surface")
-            logger.info("Using surfe interpolator")
-            return Surfe(method)
-        logger.warning("No interpolator")
-        raise InterpolatorError("Could not create interpolator")
+        get_interpolator(
+            self.bounding_box,
+            interpolatortype=interpolatortype,
+            nelements=nelements,
+            buffer=bufer,
+            element_volume=element_volume,
+            **kwargs,
+        )
 
     def create_and_add_foliation(
         self, series_surface_data, tol=None, faults=None, **kwargs
@@ -1499,176 +1318,20 @@ class GeologicalModel:
         * :class:`LoopStructural.modelling.features.builders.FaultBuilder`
         * :meth:`LoopStructural.modelling.features.builders.FaultBuilder.setup`
         """
-        if "fault_extent" in kwargs and major_axis is None:
-            major_axis = kwargs["fault_extent"]
-        if "fault_influence" in kwargs and minor_axis is None:
-            minor_axis = kwargs["fault_influence"]
-        if "fault_vectical_radius" in kwargs and intermediate_axis is None:
-            intermediate_axis = kwargs["fault_vectical_radius"]
-
-        logger.info(f'Creating fault "{fault_surface_data}"')
-        logger.info(f"Displacement: {displacement}")
-        logger.info(f"Tolerance: {tol}")
-        logger.info(f"Fault function: {faultfunction}")
-        logger.info(f"Fault slip vector: {fault_slip_vector}")
-        logger.info(f"Fault center: {fault_center}")
-        logger.info(f"Major axis: {major_axis}")
-        logger.info(f"Minor axis: {minor_axis}")
-        logger.info(f"Intermediate axis: {intermediate_axis}")
-        fault_slip_vector = np.array(fault_slip_vector, dtype="float")
-        fault_center = np.array(fault_center, dtype="float")
-
-        for k, v in kwargs.items():
-            logger.info(f"{k}: {v}")
-
-        if tol is None:
-            tol = self.tol
-            # divide the tolerance by half of the minor axis, as this is the equivalent of the distance
-            # of the unit vector
-            # if minor_axis:
-            # tol *= 0.1*minor_axis
-
-        if displacement == 0:
-            logger.warning(f"{fault_surface_data} displacement is 0")
-
-        if "data_region" in kwargs:
-            kwargs.pop("data_region")
-            logger.error("kwarg data_region currently not supported, disabling")
-        displacement_scaled = displacement / self.scale_factor
-        # create fault frame
-        interpolator = self.get_interpolator(**kwargs)
-        # faults arent supported for surfe
-        if not isinstance(interpolator, DiscreteInterpolator):
-            logger.error(
-                "Change interpolator to a discrete interpolation algorithm FDI/PLI"
-            )
-            interpolatortype = kwargs["interpolatortype"]
-            raise InterpolatorError(f"Faults not supported for {interpolatortype}")
-        fault_frame_builder = FaultBuilder(
-            interpolator, name=fault_surface_data, model=self, **kwargs
-        )
-        self._add_faults(fault_frame_builder, features=faults)
-        # add data
-        fault_frame_data = self.data.loc[
-            self.data["feature_name"] == fault_surface_data
-        ]
-        trace_mask = np.logical_and(
-            fault_frame_data["coord"] == 0, fault_frame_data["val"] == 0
-        )
-        logger.info(f"There are {np.sum(trace_mask)} points on the fault trace")
-        if np.sum(trace_mask) == 0:
-            logger.error(
-                "You cannot model a fault without defining the location of the fault"
-            )
-            raise ValueError(f"There are no points on the fault trace")
-
-        mask = np.logical_and(
-            fault_frame_data["coord"] == 0, ~np.isnan(fault_frame_data["gz"])
-        )
-        vector_data = fault_frame_data.loc[mask, ["gx", "gy", "gz"]].to_numpy()
-        mask2 = np.logical_and(
-            fault_frame_data["coord"] == 0, ~np.isnan(fault_frame_data["nz"])
-        )
-        vector_data = np.vstack(
-            [vector_data, fault_frame_data.loc[mask2, ["nx", "ny", "nz"]].to_numpy()]
-        )
-        fault_normal_vector = np.mean(vector_data, axis=0)
-        logger.info(f"Fault normal vector: {fault_normal_vector}")
-
-        mask = np.logical_and(
-            fault_frame_data["coord"] == 1, ~np.isnan(fault_frame_data["gz"])
-        )
-        if fault_slip_vector is None:
-            if (
-                "avgSlipDirEasting" in kwargs
-                and "avgSlipDirNorthing" in kwargs
-                and "avgSlipDirAltitude" in kwargs
-            ):
-                fault_slip_vector = np.array(
-                    [
-                        kwargs["avgSlipDirEasting"],
-                        kwargs["avgSlipDirNorthing"],
-                        kwargs["avgSlipDirAltitude"],
-                    ],
-                    dtype=float,
-                )
-            else:
-                fault_slip_vector = (
-                    fault_frame_data.loc[mask, ["gx", "gy", "gz"]]
-                    .mean(axis=0)
-                    .to_numpy()
-                )
-        if np.any(np.isnan(fault_slip_vector)):
-            logger.info("Fault slip vector is nan, estimating from fault normal")
-            strike_vector, dip_vector = get_vectors(fault_normal_vector[None, :])
-            fault_slip_vector = dip_vector[:, 0]
-            logger.info(f"Estimated fault slip vector: {fault_slip_vector}")
-
-        if fault_center is not None and ~np.isnan(fault_center).any():
-            fault_center = self.scale(fault_center, inplace=False)
-        else:
-            # if we haven't defined a fault centre take the
-            #  center of mass for lines assocaited with the fault trace
-            if (
-                ~np.isnan(kwargs.get("centreEasting", np.nan))
-                and ~np.isnan(kwargs.get("centreNorthing", np.nan))
-                and ~np.isnan(kwargs.get("centreAltitude", np.nan))
-            ):
-                fault_center = self.scale(
-                    np.array(
-                        [
-                            kwargs["centreEasting"],
-                            kwargs["centreNorthing"],
-                            kwargs["centreAltitude"],
-                        ],
-                        dtype=float,
-                    ),
-                    inplace=False,
-                )
-            else:
-                mask = np.logical_and(
-                    fault_frame_data["coord"] == 0, fault_frame_data["val"] == 0
-                )
-                fault_center = (
-                    fault_frame_data.loc[mask, ["X", "Y", "Z"]].mean(axis=0).to_numpy()
-                )
-        if minor_axis:
-            minor_axis = minor_axis / self.scale_factor
-        if major_axis:
-            major_axis = major_axis / self.scale_factor
-        if intermediate_axis:
-            intermediate_axis = intermediate_axis / self.scale_factor
-        fault_frame_builder.create_data_from_geometry(
-            fault_frame_data,
-            fault_center,
-            fault_normal_vector,
+        return add_fault_to_model(
+            model,
+            fault_surface_data,
+            displacement,
+            tol,
             fault_slip_vector,
-            minor_axis=minor_axis,
-            major_axis=major_axis,
-            intermediate_axis=intermediate_axis,
-            points=kwargs.get("points", False),
+            fault_center,
+            major_axis,
+            minor_axis,
+            intermediate_axis,
+            faultfunction,
+            faults,
+            **kwargs,
         )
-        if "force_mesh_geometry" not in kwargs:
-
-            fault_frame_builder.set_mesh_geometry(kwargs.get("fault_buffer", 0.2), 0)
-        if "splay" in kwargs and "splayregion" in kwargs:
-            fault_frame_builder.add_splay(kwargs["splay"], kwargs["splayregion"])
-
-        kwargs["tol"] = tol
-        fault_frame_builder.setup(**kwargs)
-        fault = fault_frame_builder.frame
-        fault.displacement = displacement_scaled
-        fault.faultfunction = faultfunction
-
-        for f in reversed(self.features):
-            if f.type == FeatureType.UNCONFORMITY:
-                fault.add_region(f)
-                break
-        if displacement == 0:
-            fault.type = "fault_inactive"
-        self._add_feature(fault)
-
-        return fault
 
     def rescale(self, points: np.ndarray, inplace: bool = True) -> np.ndarray:
         """
@@ -1687,10 +1350,10 @@ class GeologicalModel:
 
         """
         if not inplace:
-            points = points.copy()
-        points *= self.scale_factor
-        points += self.origin
-        return points
+            return self.bounding_box.rescale(points)
+        else:
+            points[:, :] = self.bounding_box.rescale(points)
+            return points
 
     def scale(self, points: np.ndarray, inplace: bool = True) -> np.ndarray:
         """Take points in UTM coordinates and reproject
@@ -1709,14 +1372,10 @@ class GeologicalModel:
         """
         points = np.array(points).astype(float)
         if not inplace:
-            points = points.copy()
-        # if len(points.shape) == 1:
-        #     points = points[None,:]
-        # if len(points.shape) != 2:
-        #     logger.error("cannot scale array of dimensions".format(len(points.shape)))
-        points -= self.origin
-        points /= self.scale_factor
-        return points
+            return self.bounding_box.scale(points)
+        else:
+            points[:, :] = self.bounding_box.scale(points)
+            return points
 
     def regular_grid(self, nsteps=None, shuffle=True, rescale=False, order="C"):
         """
