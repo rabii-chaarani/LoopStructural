@@ -19,6 +19,7 @@ __all__ = [
     "P2Unstructured2d",
     "StructuredGrid2D",
     "P2UnstructuredTetMesh",
+    "get_interpolator",
 ]
 from enum import IntEnum
 
@@ -68,6 +69,7 @@ from ..interpolators.piecewiselinear_interpolator import (
 from ..interpolators._discrete_fold_interpolator import (
     DiscreteFoldInterpolator,
 )
+from .interpolator_factory import get_interpolator
 
 try:
     from ..interpolators._surfe_wrapper import SurfeRBFInterpolator
