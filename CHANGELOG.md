@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.11](https://github.com/Loop3D/LoopStructural/compare/v1.5.10...v1.5.11) (2023-06-19)
+
+
+### Bug Fixes
+
+* Check for empty features and escape early ([083a195](https://github.com/Loop3D/LoopStructural/commit/083a195004f45cc52086b503441f93f97cb3f21d))
+* Ensure modifications to data frame are on a copy of that frame ([ed61243](https://github.com/Loop3D/LoopStructural/commit/ed6124380bc95ba91f55c88916c40e2a29463747))
+* Use fault names if present before labelling fault Fault_XXX ([7bf34fc](https://github.com/Loop3D/LoopStructural/commit/7bf34fc3e841e243b1a34dbaf36294b5ce17306f))
+
 ## [1.5.10](https://github.com/Loop3D/LoopStructural/compare/v1.5.9...v1.5.10) (2023-03-14)
 
 
